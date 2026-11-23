@@ -31,6 +31,16 @@ class Manifest(Record):
     bodies: Literal["any-subset", "all-visible"] = "any-subset"
     domains: dict[Name, list[Name]] = Field(default_factory=dict)
     glossary: list[str] = Field(default_factory=list)
+    # Optional signed predicate aliases declared by the profile author.
+    complements: dict[Name, Name] = Field(default_factory=dict)
+
+    @field_validator("complements")
+    @classmethod
+    def distinct_complements(cls, pairs):
+        if pairs.keys() & set(pairs.values()):
+            raise ValueError("complement aliases cannot also be canonical predicates")
+        return pairs
+
     constraints: list[Guard] = Field(default_factory=list)
 
     @field_validator("constraints", mode="before")

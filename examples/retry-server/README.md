@@ -1,6 +1,6 @@
 # Retry server CI demonstration
 
-This MCP stdio server publishes the recovery and payments skills in this directory. The declared host profile allows one agent to see both bodies. Its one glossary statement defines the relationship between idempotent and non-idempotent operations.
+This MCP stdio server publishes the recovery and payments skills in this directory. The declared host profile allows one agent to see both bodies. Its optional `complements` entry gives the solver the signed predicate alias described by the glossary, which defines the relationship between idempotent and non-idempotent operations.
 
 From the repository root:
 

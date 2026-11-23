@@ -10,3 +10,5 @@ domains:
   operation: [op1]
 glossary:
   - A non-idempotent operation is an operation for which idempotent is false.
+complements:
+  non_idempotent: idempotent

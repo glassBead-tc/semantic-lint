@@ -134,6 +134,7 @@ def normalize(provider, manifest, spans, rules, registry):
         key = (src, kind, old)
         if (
             src not in spans
+            or (kind == "predicates" and old in set(manifest.complements) | set(manifest.complements.values()))
             or old not in symbols
             or new not in symbols
             or symbols[old] != symbols[new]
@@ -421,12 +422,16 @@ def compile_rules(source, manifest, interpretations):
             for item in group["facts"]:
                 # Qualification evidence affects this guard only.
                 before = evidence.copy()
-                fact = bind(item["fact"], "predicates")
+                binding = item["fact"]
+                canonical = manifest.complements.get(binding["symbol"])
+                if canonical:
+                    binding = {**binding, "symbol": canonical}
+                fact = bind(binding, "predicates")
                 factors.extend(
                     {"visible": spans[key]["unit"]} for key in item["fact"]["evidence"]
                 )
                 evidence.intersection_update(before)
-                factors.append({"not": fact} if item["negated"] else fact)
+                factors.append({"not": fact} if item["negated"] != bool(canonical) else fact)
             return {"all": factors}
 
         action = bind(fields["action"], "actions")

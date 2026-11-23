@@ -536,7 +536,10 @@ class MarkdownTests(unittest.TestCase):
         literal = payment["when"][0]["facts"][0]
         literal["fact"]["symbol"] = "non_idempotent"
         literal["negated"] = False
-        broken, registry, _ = compile_rules(original["source"], PROFILE, rules)
+        declared, _, _ = compile_rules(original["source"], PROFILE, rules)
+        self.assertEqual(analyze(declared)["findings"], [])
+        implicit = PROFILE.model_copy(update={"complements": {}})
+        broken, registry, _ = compile_rules(original["source"], implicit, rules)
         self.assertEqual(len(analyze(broken)["findings"]), 1)
 
         class Normalizer:
@@ -558,7 +561,7 @@ class MarkdownTests(unittest.TestCase):
                 )
 
         spans = {s["id"]: s for s in original["source"]["spans"]}
-        corrected, changes = normalize(Normalizer(), PROFILE, spans, rules, registry)
+        corrected, changes = normalize(Normalizer(), implicit, spans, rules, registry)
         self.assertEqual(len(changes), 1)
         self.assertEqual(
             analyze(compile_rules(original["source"], PROFILE, corrected)[0])[
@@ -609,7 +612,7 @@ class MarkdownTests(unittest.TestCase):
                 return result
 
         provider = BadMerge()
-        run = extract(DEMO / "skills", PROFILE, provider)
+        run = extract(DEMO / "skills", PROFILE.model_copy(update={"complements": {}}), provider)
         self.assertEqual(provider.attempts, 2)
         self.assertEqual(run["reconciliations"], [])
         self.assertEqual(len(run["rejected_reconciliations"]), 1)
