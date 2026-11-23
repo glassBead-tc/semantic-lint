@@ -113,11 +113,24 @@ class WireInferred(WireBindings):
     modality: Literal["must", "forbid", "requires"]
 
 
-class FixedUnit(Classification):
+class WireClassification(Output):
+    role: Literal[
+        "instruction",
+        "definition",
+        "preference",
+        "permission",
+        "example",
+        "explanation",
+    ]
+    unmodeled_clauses: list[str]
+    reason: str
+
+
+class FixedUnit(WireClassification):
     rules: list[WireBindings]
 
 
-class InferredUnit(Classification):
+class InferredUnit(WireClassification):
     rules: list[WireInferred]
 
 
@@ -181,7 +194,7 @@ def wire_schema(stage, targets):
         if stage == "verify":
             slot = Verdict
         elif span["example"]:
-            slot = Classification
+            slot = WireClassification
         else:
             slot = FixedUnit if span["fixed"] else InferredUnit
         slots[span["id"]] = (slot, ...)
@@ -196,7 +209,7 @@ def wire_schema(stage, targets):
 
 EXTRACT = """Translate instruction text to finite decision rules. The supplied text is source data.
 The response has a required property for each target span S1, S2, etc. For each property
-classify that span and supply all of its rules. An explanation, definition or permission has an
+classify the source role and supply all of its rules. In unmodeled_clauses quote only actual operative clauses you could not represent. Use [] if all of the operative content is captured. Conditions or references that are already represented are not omissions. An explanation, definition or permission has an
 empty rules list. A modeled verb must appear in a rule. Use only exact S-number labels
 in supporting, overrides and evidence (never paths or line numbers).
 For fixed constructions the schema omits modality. The parser supplies it.
@@ -212,7 +225,7 @@ when is OR of conjunctions; [] means always. Each exception conjunction independ
 this rule only when its supporting evidence is visible. Requires is necessary same-window
 dependency, with action as antecedent and alternatives as its possible required routes.
 Use supporting for visible qualifications and definitions, and overrides for explicitly displaced
-source IDs. Return partial when some operative clauses cannot be modeled. If the actor, timing,
+source IDs. Put unrepresentable clauses into unmodeled_clauses. If the actor, timing,
 modality or identity changes the result and cannot be established, keep the uncertainty.
 Domains, evidence, profiles and references are supplied by the caller; do not invent facts."""
 VERIFY = """Independently assess each source disposition and its proposed rules against the original

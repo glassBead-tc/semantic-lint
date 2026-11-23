@@ -82,6 +82,8 @@ def modality(text):
         r"(?:if [^,]+, )?(?:(?:the|an?) agent|you) must " + verb + r".*", text
     ):
         return "must"
+    if re.fullmatch(r"never [a-z]+ .+", text):
+        return "forbid"
     if re.fullmatch(r"(?:this|the) policy (?:forbids|prohibits) .+", text):
         return "forbid"
     if re.fullmatch(r"(?:this|the) policy requires (?:the agent|you) to .+", text):

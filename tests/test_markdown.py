@@ -33,6 +33,11 @@ def scripted_response(shape, data):
             for r in data["dispositions"]
         }
         for sid, values in slots.items():
+            kind = values.pop("kind")
+            values["role"] = (
+                "instruction" if kind in ("modeled", "partial", "unresolved") else kind
+            )
+            values["unmodeled_clauses"] = []
             if "rules" in shape.model_fields[sid].annotation.model_fields:
                 values["rules"] = [
                     {k: v for k, v in rule.items() if k != "source"}
@@ -257,7 +262,7 @@ class MarkdownTests(unittest.TestCase):
             self.assertEqual(result, json.loads(replay.stdout))
             run = read_run(base / "red")
             recovery = next(
-                r for r in run["interpretations"] if r["origin"] == "deterministic"
+                r for r in run["interpretations"] if r["modality"] == "must"
             )
             edit = deepcopy(recovery)
             del edit["origin"], edit["modality"]

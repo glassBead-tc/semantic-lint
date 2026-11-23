@@ -67,7 +67,26 @@ def covered_request(provider, stage, payload, schema):
         for s in selected:
             row = output[s["id"]]
             bindings = row.pop("rules", [])
-            fields["dispositions"].append(dict(source=s["id"], **row))
+            omitted = row["unmodeled_clauses"]
+            if any(
+                not quote.strip() or quote.casefold() not in s["text"].casefold()
+                for quote in omitted
+            ):
+                raise ValueError(
+                    f"{s['id']}: unmodeled clauses require exact supporting text"
+                )
+            if bindings:
+                kind = "partial" if omitted else "modeled"
+            elif omitted or row["role"] == "instruction":
+                kind = "unresolved"
+            else:
+                kind = row["role"]
+            reason = row["reason"]
+            if omitted:
+                reason += " Unmodeled: " + " / ".join(omitted)
+            fields["dispositions"].append(
+                dict(source=s["id"], kind=kind, reason=reason)
+            )
             group = "fixed_bindings" if s["fixed"] else "inferred_rules"
             for rule in bindings:
                 for action in [rule["action"], *rule["alternatives"]]:
