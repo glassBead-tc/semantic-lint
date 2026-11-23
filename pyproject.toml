@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "semanticlint"
+version = "0.1.0"
+description = "Check finite agent-instruction models for conflicting requirements"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.7,<3", "z3-solver>=4.12,<5"]
+
+[project.scripts]
+semanticlint = "semanticlint.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

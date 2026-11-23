@@ -1,0 +1,91 @@
+{
+  "version": "0.1",
+  "profile": {
+    "name": "retry",
+    "receiver": "agent",
+    "window": "retry decision",
+    "evidence": "handwritten fixture",
+    "units": [
+      "recovery",
+      "payments"
+    ]
+  },
+  "domains": {
+    "actor": [
+      "agent"
+    ],
+    "operation": [
+      "op1"
+    ]
+  },
+  "actions": {
+    "retry": [
+      "actor",
+      "operation"
+    ]
+  },
+  "predicates": {
+    "failed": [
+      "operation"
+    ],
+    "non_idempotent": [
+      "operation"
+    ]
+  },
+  "rules": [
+    {
+      "id": "retry-on-failure",
+      "unit": "recovery",
+      "source": {
+        "path": "recovery/SKILL.md",
+        "line": 6,
+        "quote": "Retry every failed operation."
+      },
+      "effect": {
+        "must": {
+          "action": "retry",
+          "args": [
+            "agent",
+            "$x"
+          ]
+        }
+      },
+      "variables": {
+        "x": "operation"
+      },
+      "guard": {
+        "predicate": "failed",
+        "args": [
+          "$x"
+        ]
+      }
+    },
+    {
+      "id": "forbid-repeat-charge",
+      "unit": "payments",
+      "source": {
+        "path": "payments/SKILL.md",
+        "line": 6,
+        "quote": "Never retry a non-idempotent operation."
+      },
+      "effect": {
+        "forbid": {
+          "action": "retry",
+          "args": [
+            "agent",
+            "$x"
+          ]
+        }
+      },
+      "variables": {
+        "x": "operation"
+      },
+      "guard": {
+        "predicate": "non_idempotent",
+        "args": [
+          "$x"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "version": "0.1",
+  "profile": {
+    "name": "delivery",
+    "receiver": "agent",
+    "window": "delivery decision",
+    "evidence": "handwritten fixture",
+    "units": [
+      "delivery",
+      "verification",
+      "delegation"
+    ]
+  },
+  "domains": {
+    "actor": [
+      "agent"
+    ],
+    "artifact": [
+      "artifact1"
+    ]
+  },
+  "actions": {
+    "verify": [
+      "actor",
+      "artifact"
+    ],
+    "spawn": [
+      "actor",
+      "artifact"
+    ],
+    "local_review": [
+      "actor",
+      "artifact"
+    ]
+  },
+  "predicates": {},
+  "rules": [
+    {
+      "id": "verify-in-task",
+      "unit": "delivery",
+      "source": {
+        "path": "delivery/SKILL.md",
+        "line": 6,
+        "quote": "Verify this artifact during this delivery task."
+      },
+      "effect": {
+        "must": {
+          "action": "verify",
+          "args": [
+            "agent",
+            "artifact1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "verification-requires-delegation",
+      "unit": "verification",
+      "source": {
+        "path": "verification/SKILL.md",
+        "line": 6,
+        "quote": "Verifying this artifact requires spawning a subagent or using a local reviewer during this task."
+      },
+      "effect": {
+        "requires": {
+          "action": "verify",
+          "args": [
+            "agent",
+            "artifact1"
+          ]
+        },
+        "anyOf": [
+          {
+            "action": "spawn",
+            "args": [
+              "agent",
+              "artifact1"
+            ]
+          },
+          {
+            "action": "local_review",
+            "args": [
+              "agent",
+              "artifact1"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "no-delegation",
+      "unit": "delegation",
+      "source": {
+        "path": "delegation/SKILL.md",
+        "line": 6,
+        "quote": "Never spawn a subagent for this artifact during this delivery task."
+      },
+      "effect": {
+        "forbid": {
+          "action": "spawn",
+          "args": [
+            "agent",
+            "artifact1"
+          ]
+        }
+      }
+    }
+  ]
+}
