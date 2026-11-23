@@ -266,6 +266,10 @@ def extract(root, manifest, provider):
             "verify",
             dict(
                 profile=manifest.model_dump(by_alias=True),
+                documents={
+                    path: doc["text"] for path, doc in source["documents"].items()
+                },
+                references=source["links"],
                 spans=list(spans.values()),
                 dispositions=dispositions,
                 rules=rules,

@@ -230,7 +230,7 @@ modality or identity changes the result and cannot be established, keep the unce
 Domains, evidence, profiles and references are supplied by the caller; do not invent facts."""
 VERIFY = """Independently assess each source disposition and its proposed rules against the original
 text, headings, definitions, profile and reconstruction. Put each judgment in its required S-number property. Use those IDs in suspected.sources. Provide exactly one judgment for every
-source span. Check omitted instructions as well as asserted ones. Confirm modality, polarity,
+source span. The documents field gives each entire source file from first to last byte as decoded UTF-8. Assess the supplied complete texts under the declared disclosure profile. Check omitted instructions as well as asserted ones. Base any scope concern on an identifiable passage or missing referenced resource. A hypothetical instruction outside the supplied scope is not a source ambiguity. Confirm modality, polarity,
 necessary vs optional routes, object identity, guards, exceptions, term mappings, applicability
 and temporal scope. Check terms across documents for unsupported merges and missed explicit aliases.
 Agree only if faithful. If interpretations could change the result, abstain and explain the
