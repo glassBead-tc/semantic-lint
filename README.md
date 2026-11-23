@@ -27,7 +27,7 @@ The CLI returns 0 for a completed analysis, including a completed analysis with 
 
 ## Check Markdown skills
 
-Set `OPENAI_API_KEY` in the process environment for fresh extraction. Optionally set `SEMANTICLINT_MODEL` or pass `--model` to select a model with Structured Outputs support. The default is `gpt-4.1-mini`. No glossary is required. With no manifest, catalog descriptions are assumed visible and bodies independently eligible. Host-dependent findings are conditional.
+Set `OPENAI_API_KEY` in the process environment for fresh extraction. Optionally set `SEMANTICLINT_MODEL` or pass `--model` to select a model with Structured Outputs support. The default is `gpt-5.4-mini-2026-03-17`. No glossary is required. With no manifest, catalog descriptions are assumed visible and bodies independently eligible. Host-dependent findings are conditional.
 
 ```sh
 semanticlint check examples/retry-server/skills --manifest examples/retry-server/profile.yml --cache .semanticlint/cache --save-run .semanticlint/baseline
@@ -36,7 +36,7 @@ semanticlint replay .semanticlint/baseline --format json
 
 The parser records source bytes, digests, heading context and local references. It fixes unambiguous explicit modalities before the provider proposes typed bindings for each document. A separate verifier checks the reconstruction against the whole bundle. The JSON report identifies unresolved interpretations and source-level qualifications, and includes the token usage returned by the provider. Uncertain interpretations can produce conditional findings. Use `--fail-on actionable-conflict` for a declared-host policy, or `--fail-on reviewed-conflict` for human-reviewed findings. Both policies return 1 when triggered.
 
-There is one extraction request per changed document and reference closure, then one verification request for the bundle. `--cache DIR` reuses identical requests. `--offline` on `check` requires complete matching cache entries. `replay` runs locally from the snapshot with no key. Source and model responses are stored in the cache and saved run. Use a local directory suitable for the sensitivity of the inputs.
+There is one extraction request per changed document and reference closure, then a bundle-level registry reconciliation for multi-rule inputs and one independent verification request. `--cache DIR` reuses identical requests. `--offline` on `check` requires complete matching cache entries. `replay` runs locally from the snapshot with no key. Source and model responses are stored in the cache and saved run. Use a local directory suitable for the sensitivity of the inputs.
 
 ### Inspect or correct a finding
 

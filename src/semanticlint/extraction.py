@@ -147,6 +147,34 @@ class Verification(Output):
     suspected: list[SuspectedConflict]
 
 
+class Reconciliation(Output):
+    source: str
+    kind: Literal["actions", "predicates"]
+    original: str
+    canonical: str
+    invert: bool
+    evidence: list[str]
+    reason: str
+
+
+class Normalization(Output):
+    changes: list[Reconciliation]
+
+
+NORMALIZE = """Compare the project-local bindings across this bundle before verification.
+Reconcile equivalent actions or predicates across files when source text or the supplied glossary
+establishes the same meaning. If a predicate is the complement of an existing predicate, map it
+to the positive canonical predicate and set invert=true. Never invert actions. Use an existing
+symbol with the identical argument signature as canonical. Apply a change to a single source
+span (exact S-number). Cite the relevant span IDs and give the evidence for the equivalence or
+complement in reason. Only cite a separate definition when the mapping needs that definition
+to be visible. Identical operative words in two skills can be normalized on their own evidence.
+A shared spelling supplies no evidence for merging distinct project-defined meanings.
+If uncertain, leave the bindings distinct for the verifier to flag. Return changes=[] if
+the bindings are already consistent. Each original symbol in a source may be mapped only once.
+Never change modality, actor, objects, activation conditions, exceptions, or obligations."""
+
+
 def wire_schema(stage, targets):
     slots = {}
     for span in targets:
@@ -206,7 +234,7 @@ class Provider:
         self.receipts = []
 
     def request(self, stage, payload, schema):
-        prompt = EXTRACT if stage == "extract" else VERIFY
+        prompt = {"extract": EXTRACT, "normalize": NORMALIZE, "verify": VERIFY}[stage]
         key = fingerprint(
             [stage, self.model, prompt, schema.model_json_schema(), payload]
         )

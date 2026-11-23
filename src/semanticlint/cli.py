@@ -24,7 +24,7 @@ def parser():
     check.add_argument("--manifest", type=Path)
     check.add_argument("--profile")
     check.add_argument(
-        "--model", default=os.getenv("SEMANTICLINT_MODEL", "gpt-4.1-mini")
+        "--model", default=os.getenv("SEMANTICLINT_MODEL", "gpt-5.4-mini-2026-03-17")
     )
     check.add_argument("--cache", type=Path)
     check.add_argument("--offline", action="store_true")

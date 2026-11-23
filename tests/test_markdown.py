@@ -58,6 +58,14 @@ class RecordedResponses:
     def parse(self, *, input, text_format, model, **kwargs):
         payload = json.loads(input)
         self.calls.append(payload)
+        if text_format.__name__ == "Normalization":
+            return SimpleNamespace(
+                status="completed",
+                model=model,
+                id="synthetic",
+                usage=None,
+                output_parsed=text_format(changes=[]),
+            )
         if "targets" in payload:
             fixed, inferred, dispositions = [], [], []
             for span in payload["targets"]:
@@ -196,7 +204,7 @@ class MarkdownTests(unittest.TestCase):
                 "fixture-model", cache, client=SimpleNamespace(responses=responses)
             )
             extract(root, PROFILE, provider)
-            self.assertEqual(len(responses.calls), 3)
+            self.assertEqual(len(responses.calls), 4)
 
             def check(saved, *flags):
                 return command(
@@ -234,7 +242,7 @@ class MarkdownTests(unittest.TestCase):
                     "fixture-model", cache, client=SimpleNamespace(responses=responses)
                 ),
             )
-            self.assertEqual(len(responses.calls), 5)
+            self.assertEqual(len(responses.calls), 7)
             broken = check(base / "red")
             self.assertEqual(broken.returncode, 1, broken.stderr)
             result = json.loads(broken.stdout)
@@ -386,6 +394,8 @@ class MarkdownTests(unittest.TestCase):
             receipts = []
 
             def request(self, stage, payload, schema):
+                if stage == "normalize":
+                    return schema(changes=[])
                 if stage == "verify":
                     verbs = [s for s in payload["spans"] if s["fixed"]]
                     ambiguous = not any(
@@ -506,3 +516,49 @@ class MarkdownTests(unittest.TestCase):
                             for s in r["spans"]
                         )
                     )
+
+    def test_attested_complements_are_lowered_before_verification(self):
+        from semanticlint.pipeline import normalize, compile_rules
+        from semanticlint.checker import analyze
+
+        original = extract(
+            DEMO / "skills",
+            PROFILE,
+            Provider("fixture", client=SimpleNamespace(responses=RecordedResponses())),
+        )
+        rules = deepcopy(original["interpretations"])
+        payment = next(r for r in rules if r["modality"] == "forbid")
+        literal = payment["when"][0]["facts"][0]
+        literal["fact"]["symbol"] = "non_idempotent"
+        literal["negated"] = False
+        broken, registry, _ = compile_rules(original["source"], PROFILE, rules)
+        self.assertEqual(len(analyze(broken)["findings"]), 1)
+
+        class Normalizer:
+            def request(self, stage, payload, schema):
+                row = next(r for r in payload["rules"] if r["modality"] == "forbid")
+                sid = row["source"]
+                return schema(
+                    changes=[
+                        dict(
+                            source=sid,
+                            kind="predicates",
+                            original="non_idempotent",
+                            canonical="idempotent",
+                            invert=True,
+                            evidence=[sid],
+                            reason="The profile defines logical complements.",
+                        )
+                    ]
+                )
+
+        spans = {s["id"]: s for s in original["source"]["spans"]}
+        corrected, changes = normalize(Normalizer(), PROFILE, spans, rules, registry)
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(
+            analyze(compile_rules(original["source"], PROFILE, corrected)[0])[
+                "findings"
+            ],
+            [],
+        )
+        self.assertFalse(literal["negated"])

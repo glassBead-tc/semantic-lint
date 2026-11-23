@@ -7,7 +7,14 @@ import re
 from pathlib import Path
 
 from .checker import analyze
-from .extraction import Extraction, Verification, atomic_json, fingerprint, wire_schema
+from .extraction import (
+    Normalization,
+    Extraction,
+    Verification,
+    atomic_json,
+    fingerprint,
+    wire_schema,
+)
 from .ir import Package
 from .sources import Manifest, scan
 
@@ -77,6 +84,65 @@ def covered_request(provider, stage, payload, schema):
     return schema.model_validate(
         translate_ids(fields, {v: k for k, v in labels.items()})
     )
+
+
+def normalize(provider, manifest, spans, rules, registry):
+    labels = {sid: f"S{i+1}" for i, sid in enumerate(spans)}
+    payload = translate_ids(
+        dict(
+            profile=manifest.model_dump(by_alias=True),
+            spans=list(spans.values()),
+            rules=rules,
+            registry=registry,
+        ),
+        labels,
+    )
+    result = provider.request("normalize", payload, Normalization)
+    changes = translate_ids(result.model_dump(), {v: k for k, v in labels.items()})[
+        "changes"
+    ]
+    lookup = {}
+    for change in changes:
+        kind = change["kind"]
+        src, old, new = change["source"], change["original"], change["canonical"]
+        symbols = registry[kind]
+        key = (src, kind, old)
+        if (
+            src not in spans
+            or old not in symbols
+            or new not in symbols
+            or symbols[old] != symbols[new]
+            or (kind == "actions" and change["invert"])
+            or key in lookup
+            or not change["evidence"]
+            or not set(change["evidence"]) <= spans.keys()
+            or not change["reason"].strip()
+        ):
+            raise ValueError("invalid registry reconciliation: " + str(change))
+        lookup[key] = change
+    applied = set()
+    corrected = deepcopy(rules)
+    for rule in corrected:
+
+        def rewrite(binding, kind):
+            key = (rule["source"], kind, binding["symbol"])
+            change = lookup.get(key)
+            if not change:
+                return False
+            binding["symbol"] = change["canonical"]
+            binding["evidence"] = sorted(set(binding["evidence"] + change["evidence"]))
+            applied.add(key)
+            return change["invert"]
+
+        for action in [rule["action"], *rule["alternatives"]]:
+            rewrite(action, "actions")
+        for group in rule["when"] + rule["exceptions"]:
+            for literal in group["facts"]:
+                if rewrite(literal["fact"], "predicates"):
+                    literal["negated"] = not literal["negated"]
+    if applied != set(lookup):
+        raise ValueError("registry reconciliation has no matching source binding")
+    return corrected, changes
 
 
 def review_base(run):
@@ -161,6 +227,11 @@ def extract(root, manifest, provider):
             if has_rule != (dispositions[sid]["kind"] in ("modeled", "partial")):
                 raise ValueError(f"{sid}: rule and disposition disagree")
     package, registry, provenance = compile_rules(source, manifest, rules)
+    original_rules = rules
+    reconciliations = []
+    if len({r["source"] for r in rules}) > 1:
+        rules, reconciliations = normalize(provider, manifest, spans, rules, registry)
+        package, registry, provenance = compile_rules(source, manifest, rules)
     reconstructions = [
         dict(
             id=r.id,
@@ -179,6 +250,7 @@ def extract(root, manifest, provider):
             rules=rules,
             registry=registry,
             reconstructions=reconstructions,
+            reconciliations=reconciliations,
         ),
         Verification,
     )
@@ -198,6 +270,8 @@ def extract(root, manifest, provider):
         source=source,
         manifest=manifest.model_dump(by_alias=True),
         interpretations=rules,
+        extracted=original_rules,
+        reconciliations=reconciliations,
         dispositions=dispositions,
         judgments=judgments,
         suspected=suspected,
@@ -235,11 +309,20 @@ def compile_rules(source, manifest, interpretations):
             new = set(call["evidence"])
             if not new <= spans.keys():
                 raise ValueError(f"{rid}: unknown evidence")
-            if not any(
-                call["wording"].casefold() in spans[k]["text"].casefold() for k in new
-            ):
+            # A typed gloss may select separated source words ("failed operation"
+            # in "failed idempotent operation"). Preserve the exact evidence and
+            # distinguish discontinuous wording from a verbatim phrase.
+            words = re.findall(r"[\w-]+", call["wording"].casefold())
+
+            def attests(key):
+                source_words = iter(
+                    re.findall(r"[\w-]+", spans[key]["text"].casefold())
+                )
+                return bool(words) and all(word in source_words for word in words)
+
+            if not any(attests(k) for k in new):
                 raise ValueError(
-                    f"{rid}: binding wording must quote one of its evidence spans"
+                    f"{rid}: binding words {call['wording']!r} are absent from cited text"
                 )
             evidence.update(new)
             key = call["symbol"]
