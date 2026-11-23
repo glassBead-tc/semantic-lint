@@ -567,3 +567,50 @@ class MarkdownTests(unittest.TestCase):
             [],
         )
         self.assertFalse(literal["negated"])
+
+    def test_rejected_normalization_is_reverted_and_reverified(self):
+        class BadMerge:
+            model = "fixture"
+            receipts = []
+            attempts = 0
+
+            def request(self, stage, payload, schema):
+                if stage == "normalize":
+                    payment = next(
+                        r for r in payload["rules"] if r["modality"] == "forbid"
+                    )
+                    sid = payment["source"]
+                    return schema(
+                        changes=[
+                            dict(
+                                source=sid,
+                                kind="predicates",
+                                original="idempotent",
+                                canonical="failed",
+                                invert=True,
+                                evidence=[sid],
+                                reason="Deliberately invalid relationship in a test.",
+                            )
+                        ]
+                    )
+                result = (
+                    RecordedResponses()
+                    .parse(
+                        input=json.dumps(payload), model=self.model, text_format=schema
+                    )
+                    .output_parsed
+                )
+                if stage == "verify":
+                    self.attempts += 1
+                    if payload["reconciliations"]:
+                        getattr(
+                            result, payload["reconciliations"][0]["source"]
+                        ).verdict = "disagree"
+                return result
+
+        provider = BadMerge()
+        run = extract(DEMO / "skills", PROFILE, provider)
+        self.assertEqual(provider.attempts, 2)
+        self.assertEqual(run["reconciliations"], [])
+        self.assertEqual(len(run["rejected_reconciliations"]), 1)
+        self.assertEqual(report(run)["coverage"]["unresolved"], 0)

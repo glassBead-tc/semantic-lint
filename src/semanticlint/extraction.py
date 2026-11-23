@@ -183,7 +183,7 @@ span (exact S-number). Cite the relevant span IDs and give the evidence for the 
 complement in reason. Only cite a separate definition when the mapping needs that definition
 to be visible. Identical operative words in two skills can be normalized on their own evidence.
 A shared spelling supplies no evidence for merging distinct project-defined meanings.
-If uncertain, leave the bindings distinct for the verifier to flag. Return changes=[] if
+If the correct canonical counterpart does not exist in the registry, leave the term alone. Two independent properties can both be true and their guards can overlap. Similar argument sorts or opposite modalities never justify changing the meaning of either predicate. If uncertain, leave the bindings distinct for the verifier to flag. Return changes=[] if
 the bindings are already consistent. Each original symbol in a source may be mapped only once.
 Never change modality, actor, objects, activation conditions, exceptions, or obligations."""
 

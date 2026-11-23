@@ -251,29 +251,48 @@ def extract(root, manifest, provider):
     if len({r["source"] for r in rules}) > 1:
         rules, reconciliations = normalize(provider, manifest, spans, rules, registry)
         package, registry, provenance = compile_rules(source, manifest, rules)
-    reconstructions = [
-        dict(
-            id=r.id,
-            text=render_rule(r.model_dump(by_alias=True)),
-            evidence=provenance[r.id],
+
+    def verify(package, registry, provenance, rules, reconciliations):
+        reconstructions = [
+            dict(
+                id=r.id,
+                text=render_rule(r.model_dump(by_alias=True)),
+                evidence=provenance[r.id],
+            )
+            for r in package.rules
+        ]
+        verification = covered_request(
+            provider,
+            "verify",
+            dict(
+                profile=manifest.model_dump(by_alias=True),
+                spans=list(spans.values()),
+                dispositions=dispositions,
+                rules=rules,
+                registry=registry,
+                reconstructions=reconstructions,
+                reconciliations=reconciliations,
+            ),
+            Verification,
         )
-        for r in package.rules
-    ]
-    verification = covered_request(
-        provider,
-        "verify",
-        dict(
-            profile=manifest.model_dump(by_alias=True),
-            spans=list(spans.values()),
-            dispositions=dispositions,
-            rules=rules,
-            registry=registry,
-            reconstructions=reconstructions,
-            reconciliations=reconciliations,
-        ),
-        Verification,
+        return verification, index(verification.judgments, spans, "verification")
+
+    verification, judgments = verify(
+        package, registry, provenance, rules, reconciliations
     )
-    judgments = index(verification.judgments, spans, "verification")
+    rejected = []
+    if any(judgments[c["source"]]["verdict"] != "agree" for c in reconciliations):
+        # Revert the interdependent mapping batch. Only a fresh verification
+        # of the original interpretation can establish its source fidelity.
+        rejected = [
+            {"change": c, "assessment": judgments[c["source"]]} for c in reconciliations
+        ]
+        rules = original_rules
+        reconciliations = []
+        package, registry, provenance = compile_rules(source, manifest, rules)
+        verification, judgments = verify(
+            package, registry, provenance, rules, reconciliations
+        )
     suspected = [item.model_dump() for item in verification.suspected]
     for item in suspected:
         if (
@@ -290,6 +309,7 @@ def extract(root, manifest, provider):
         manifest=manifest.model_dump(by_alias=True),
         interpretations=rules,
         extracted=original_rules,
+        rejected_reconciliations=rejected,
         reconciliations=reconciliations,
         dispositions=dispositions,
         judgments=judgments,
