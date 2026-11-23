@@ -286,6 +286,13 @@ def extract(root, manifest, provider):
             )
             for r in package.rules
         ]
+        # Show the verifier what the reconstructed rules already establish so
+        # it can distinguish a witness from an alternate source interpretation.
+        established = [
+            {"sources": [provenance[row["rule"]]["source"] for row in finding["core"]],
+             "context": finding["context"]}
+            for finding in analyze(package)["findings"]
+        ]
         verification = covered_request(
             provider,
             "verify",
@@ -300,6 +307,7 @@ def extract(root, manifest, provider):
                 rules=rules,
                 registry=registry,
                 reconstructions=reconstructions,
+                established=established,
                 reconciliations=reconciliations,
             ),
             Verification,
