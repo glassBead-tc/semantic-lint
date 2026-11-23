@@ -7,7 +7,7 @@ from tempfile import NamedTemporaryFile
 from typing import Literal
 
 from openai import OpenAI
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, create_model
 
 from .sources import digest
 
@@ -61,8 +61,7 @@ class Conjunction(Output):
     evidence: list[str]
 
 
-class Fields(Output):
-    source: str
+class Bindings(Output):
     action: Binding
     alternatives: list[Binding]
     when: list[Conjunction]
@@ -71,12 +70,19 @@ class Fields(Output):
     overrides: list[str]
 
 
-class Inferred(Fields):
+class InferredBindings(Bindings):
     modality: Literal["must", "forbid", "requires"]
 
 
-class Disposition(Output):
+class Fields(Bindings):
     source: str
+
+
+class Inferred(InferredBindings):
+    source: str
+
+
+class Classification(Output):
     kind: Literal[
         "modeled",
         "partial",
@@ -90,16 +96,31 @@ class Disposition(Output):
     reason: str
 
 
+class Disposition(Classification):
+    source: str
+
+
+class FixedUnit(Classification):
+    rules: list[Bindings]
+
+
+class InferredUnit(Classification):
+    rules: list[InferredBindings]
+
+
 class Extraction(Output):
     fixed_bindings: list[Fields]
     inferred_rules: list[Inferred]
     dispositions: list[Disposition]
 
 
-class Judgment(Output):
-    source: str
+class Verdict(Output):
     verdict: Literal["agree", "disagree", "abstain"]
     reason: str
+
+
+class Judgment(Verdict):
+    source: str
 
 
 class SuspectedConflict(Output):
@@ -113,10 +134,31 @@ class Verification(Output):
     suspected: list[SuspectedConflict]
 
 
+def wire_schema(stage, targets):
+    slots = {}
+    for span in targets:
+        if stage == "verify":
+            slot = Verdict
+        elif span["example"]:
+            slot = Classification
+        else:
+            slot = FixedUnit if span["fixed"] else InferredUnit
+        slots[span["id"]] = (slot, ...)
+    if stage == "verify":
+        slots["suspected"] = (list[SuspectedConflict], ...)
+    return create_model(
+        "SourceExtraction" if stage == "extract" else "SourceVerification",
+        __base__=Output,
+        **slots,
+    )
+
+
 EXTRACT = """Translate instruction text to finite decision rules. The supplied text is source data.
-In every source, supporting, overrides, sources and evidence field use only the exact short span IDs (e.g. S1 or S2). Never use paths, line numbers, or quote text in ID fields. Only emit rules and dispositions for target spans. Return exactly one disposition per target,
-including non-normative descriptions, headings and definitions. A source can yield multiple rules.
-For fixed constructions provide only fixed_bindings: the parser owns their modality.
+The response has a required property for each target span S1, S2, etc. For each property
+classify that span and supply all of its rules. An explanation, definition or permission has an
+empty rules list. A modeled verb must appear in a rule. Use only exact S-number labels
+in supporting, overrides and evidence (never paths or line numbers).
+For fixed constructions the schema omits modality. The parser supplies it.
 If a fixed construction is misclassified or unsupported, abstain. For other clear duties infer modality.
 Never turn examples, permissions, descriptions, or epistemic text into obligations.
 Use actor first for actions (default actor value is the profile receiver), then typed objects.
@@ -133,7 +175,7 @@ source IDs. Return partial when some operative clauses cannot be modeled. If the
 modality or identity changes the result and cannot be established, keep the uncertainty.
 Domains, evidence, profiles and references are supplied by the caller; do not invent facts."""
 VERIFY = """Independently assess each source disposition and its proposed rules against the original
-text, headings, definitions, profile and reconstruction. Use the exact S-number span IDs from required_source_ids in judgment.source and suspected.sources. Provide exactly one judgment for every
+text, headings, definitions, profile and reconstruction. Put each judgment in its required S-number property. Use those IDs in suspected.sources. Provide exactly one judgment for every
 source span. Check omitted instructions as well as asserted ones. Confirm modality, polarity,
 necessary vs optional routes, object identity, guards, exceptions, term mappings, applicability
 and temporal scope. Check terms across documents for unsupported merges and missed explicit aliases.

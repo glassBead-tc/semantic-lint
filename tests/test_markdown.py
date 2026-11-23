@@ -20,6 +20,28 @@ DEMO = Path(__file__).resolve().parents[1] / "examples" / "retry-server"
 PROFILE = Manifest.model_validate(yaml.safe_load((DEMO / "profile.yml").read_text()))
 
 
+def scripted_response(shape, data):
+    if "judgments" in data:
+        slots = {
+            r["source"]: {k: v for k, v in r.items() if k != "source"}
+            for r in data["judgments"]
+        }
+        slots["suspected"] = data["suspected"]
+    else:
+        slots = {
+            r["source"]: {k: v for k, v in r.items() if k != "source"}
+            for r in data["dispositions"]
+        }
+        for sid, values in slots.items():
+            if "rules" in shape.model_fields[sid].annotation.model_fields:
+                values["rules"] = [
+                    {k: v for k, v in rule.items() if k != "source"}
+                    for rule in data["fixed_bindings"] + data["inferred_rules"]
+                    if rule["source"] == sid
+                ]
+    return shape.model_validate(slots)
+
+
 class RecordedResponses:
     """Synthetic messages for the two documented retry passages only."""
 
@@ -104,7 +126,7 @@ class RecordedResponses:
             model=model,
             id="synthetic",
             usage=None,
-            output_parsed=text_format.model_validate(out),
+            output_parsed=scripted_response(text_format, out),
         )
 
 
@@ -363,7 +385,8 @@ class MarkdownTests(unittest.TestCase):
                         s["kind"] == "body" and "means" in s["text"]
                         for s in payload["spans"]
                     )
-                    return schema.model_validate(
+                    return scripted_response(
+                        schema,
                         dict(
                             judgments=[
                                 dict(
@@ -384,7 +407,7 @@ class MarkdownTests(unittest.TestCase):
                                 if ambiguous
                                 else []
                             ),
-                        )
+                        ),
                     )
                 fixed = []
                 dispositions = []
@@ -434,12 +457,13 @@ class MarkdownTests(unittest.TestCase):
                             reason="source classification",
                         )
                     )
-                return schema.model_validate(
+                return scripted_response(
+                    schema,
                     dict(
                         fixed_bindings=fixed,
                         inferred_rules=[],
                         dispositions=dispositions,
-                    )
+                    ),
                 )
 
         with TemporaryDirectory() as tmp:

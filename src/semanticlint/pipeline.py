@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from .checker import analyze
-from .extraction import Extraction, Verification, atomic_json, fingerprint
+from .extraction import Extraction, Verification, atomic_json, fingerprint, wire_schema
 from .ir import Package
 from .sources import Manifest, scan
 
@@ -51,26 +51,26 @@ def covered_request(provider, stage, payload, schema):
     context = targets + payload.get("reference_material", [])
     labels = {s["id"]: f"S{i+1}" for i, s in enumerate(context)}
     wire = translate_ids(payload, labels)
-    expected = [labels[s["id"]] for s in targets]
-    wire["required_source_ids"] = expected
-    for attempt in range(2):
-        response = provider.request(stage, wire, schema)
-        rows = response.dispositions if stage == "extract" else response.judgments
-        try:
-            index(rows, expected, stage)
-        except ValueError as error:
-            if attempt:
-                raise
-            wire = {
-                **wire,
-                "correction": str(error)
-                + ". Return one record for each required_source_ids entry, using its exact S-number.",
-            }
-            continue
-        return schema.model_validate(
-            translate_ids(response.model_dump(), {v: k for k, v in labels.items()})
-        )
-    raise AssertionError("unreachable")
+    selected = wire["targets" if stage == "extract" else "spans"]
+    wire["required_source_ids"] = [s["id"] for s in selected]
+    shape = wire_schema(stage, selected)
+    output = provider.request(stage, wire, shape).model_dump()
+    if stage == "extract":
+        fields = {"fixed_bindings": [], "inferred_rules": [], "dispositions": []}
+        for s in selected:
+            row = output[s["id"]]
+            bindings = row.pop("rules", [])
+            fields["dispositions"].append(dict(source=s["id"], **row))
+            group = "fixed_bindings" if s["fixed"] else "inferred_rules"
+            fields[group].extend(dict(source=s["id"], **rule) for rule in bindings)
+    else:
+        fields = {
+            "suspected": output.pop("suspected"),
+            "judgments": [dict(source=k, **v) for k, v in output.items()],
+        }
+    return schema.model_validate(
+        translate_ids(fields, {v: k for k, v in labels.items()})
+    )
 
 
 def review_base(run):
