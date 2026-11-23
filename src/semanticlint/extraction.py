@@ -188,15 +188,31 @@ the bindings are already consistent. Each original symbol in a source may be map
 Never change modality, actor, objects, activation conditions, exceptions, or obligations."""
 
 
-def wire_schema(stage, targets):
+def wire_schema(stage, targets, source_ids):
     slots = {}
+    if stage == "extract" and targets:
+        # Enforce citation membership inside every nested binding, including
+        # references to definitions outside the target document.
+        ids = list[Literal[tuple(source_ids)]]
+        evidence = (ids, ...)
+        fact = create_model("CitedFact", __base__=Binding, evidence=evidence)
+        action = create_model("CitedAction", __base__=ActionBinding, evidence=evidence)
+        literal = create_model("CitedLiteral", __base__=LiteralFact, fact=(fact, ...))
+        group = create_model("CitedGroup", __base__=Conjunction, facts=(list[literal], ...), evidence=evidence)
+        terms = dict(action=(action, ...), alternatives=(list[action], ...),
+                     when=(list[group], ...), exceptions=(list[group], ...),
+                     supporting=evidence, overrides=evidence)
+        fixed = create_model("CitedBindings", __base__=WireBindings, **terms)
+        inferred = create_model("CitedInferred", __base__=WireInferred, **terms)
+        fixed_unit = create_model("CitedFixedUnit", __base__=FixedUnit, rules=(list[fixed], ...))
+        inferred_unit = create_model("CitedInferredUnit", __base__=InferredUnit, rules=(list[inferred], ...))
     for span in targets:
         if stage == "verify":
             slot = Verdict
         elif span["example"]:
             slot = WireClassification
         else:
-            slot = FixedUnit if span["fixed"] else InferredUnit
+            slot = fixed_unit if span["fixed"] else inferred_unit
         slots[span["id"]] = (slot, ...)
     if stage == "verify":
         slots["suspected"] = (list[SuspectedConflict], ...)

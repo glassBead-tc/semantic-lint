@@ -60,7 +60,7 @@ def covered_request(provider, stage, payload, schema):
     wire = translate_ids(payload, labels)
     selected = wire["targets" if stage == "extract" else "spans"]
     wire["required_source_ids"] = [s["id"] for s in selected]
-    shape = wire_schema(stage, selected)
+    shape = wire_schema(stage, selected, labels.values())
     output = provider.request(stage, wire, shape).model_dump()
     if stage == "extract":
         fields = {"fixed_bindings": [], "inferred_rules": [], "dispositions": []}
