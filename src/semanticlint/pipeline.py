@@ -369,7 +369,7 @@ def compile_rules(source, manifest, interpretations):
         evidence = {sid, *fields["supporting"]}
         mapping = []
 
-        def bind(call, kind):
+        def bind(call, kind, negated=False):
             if not call["evidence"] or not call["wording"].strip():
                 raise ValueError(f"{rid}: missing binding evidence")
             new = set(call["evidence"])
@@ -386,6 +386,18 @@ def compile_rules(source, manifest, interpretations):
                 )
                 return bool(words) and all(word in source_words for word in words)
 
+            # A signed binding may cite the base word within a profile-declared
+            # compound (e.g. "idempotent" in "non-idempotent"). Preserve the
+            # source spelling and require the declared negative polarity.
+            if negated and kind == "predicates" and not any(attests(k) for k in new):
+                for alias, canonical in manifest.complements.items():
+                    if canonical != call["symbol"] or words != [canonical]:
+                        continue
+                    spelling = alias.replace("_", "-")
+                    if any(spelling in re.findall(r"[\w-]+", spans[k]["text"].casefold()) for k in new):
+                        words = [spelling]
+                        call = {**call, "wording": spelling}
+                        break
             if not any(attests(k) for k in new):
                 raise ValueError(
                     f"{rid}: binding words {call['wording']!r} are absent from cited text"
@@ -426,7 +438,7 @@ def compile_rules(source, manifest, interpretations):
                 canonical = manifest.complements.get(binding["symbol"])
                 if canonical:
                     binding = {**binding, "symbol": canonical}
-                fact = bind(binding, "predicates")
+                fact = bind(binding, "predicates", item["negated"] != bool(canonical))
                 factors.extend(
                     {"visible": spans[key]["unit"]} for key in item["fact"]["evidence"]
                 )
