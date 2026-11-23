@@ -1,0 +1,12 @@
+version: 1
+name: retry-decision
+window: Decide whether this agent retries the current operation.
+evidence: maintainer-declared
+skills: [recovery/SKILL.md, payments/SKILL.md]
+catalog: names-and-descriptions-visible
+bodies: any-subset
+domains:
+  actor: [agent]
+  operation: [op1]
+glossary:
+  - A non-idempotent operation is an operation for which idempotent is false.

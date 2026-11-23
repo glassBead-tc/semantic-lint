@@ -1,6 +1,6 @@
 # SemanticLint
 
-SemanticLint checks whether an agent can comply with a finite set of handwritten instruction rules. A finding includes a possible disclosure and task context, the responsible source passages, and an inclusion-minimal set of incompatible grounded rules.
+SemanticLint extracts behavioral rules from Markdown skills and checks whether an agent can comply with them in a finite decision context. A finding includes a possible disclosure and task context, the responsible source passages, and an inclusion-minimal set of incompatible grounded rules.
 
 ## Run the checker
 
@@ -25,4 +25,38 @@ The checker checks connected action components, explores distinct locally releva
 
 The CLI returns 0 for a completed analysis, including a completed analysis with findings. Invalid inputs and incomplete searches return 2. Use `--max-contexts` and `--timeout-ms` to set the per-component assignment cap and per-query solver timeout. Partial results retain proven findings. In JSON mode invalid input is reported on stderr and analysis reports appear on stdout.
 
-Milestone 1 trusts the handwritten interpretation and its source attribution. The accompanying Markdown lets a reader inspect the fixture passages. Automatic extraction, source-digest validation, and the MCP server's CI demonstration are planned in the [implementation and evaluation specification](docs/SPEC.md).
+## Check Markdown skills
+
+Set `OPENAI_API_KEY` in the process environment for fresh extraction. Optionally set `SEMANTICLINT_MODEL` or pass `--model` to select a model with Structured Outputs support. The default is `gpt-4.1-mini`. No glossary is required. With no manifest, catalog descriptions are assumed visible and bodies independently eligible. Host-dependent findings are conditional.
+
+```sh
+semanticlint check examples/retry-server/skills --manifest examples/retry-server/profile.yml --cache .semanticlint/cache --save-run .semanticlint/baseline
+semanticlint replay .semanticlint/baseline --format json
+```
+
+The parser records source bytes, digests, heading context and local references. It fixes unambiguous explicit modalities before the provider proposes typed bindings for each document. A separate verifier checks the reconstruction against the whole bundle. The JSON report identifies unresolved interpretations and source-level qualifications, and includes the token usage returned by the provider. Uncertain interpretations can produce conditional findings. Use `--fail-on actionable-conflict` for a declared-host policy, or `--fail-on reviewed-conflict` for human-reviewed findings. Both policies return 1 when triggered.
+
+There is one extraction request per changed document and reference closure, then one verification request for the bundle. `--cache DIR` reuses identical requests. `--offline` on `check` requires complete matching cache entries. `replay` runs locally from the snapshot with no key. Source and model responses are stored in the cache and saved run. Use a local directory suitable for the sensitivity of the inputs.
+
+### Inspect or correct a finding
+
+Use `semanticlint explain RUN SL-001` with an ID from the report. The saved `run.json` contains the exact source text, IR, mapping evidence, dispositions and verifier judgments. An overlay is a JSON object with `base` equal to the report's `run_id` and an `edits` array. Each edit names the source span, records a reason, and supplies a replacement interpretation for that span. To mark one mapping unresolved, use:
+
+```json
+{
+  "base": "<run_id>",
+  "edits": [{
+    "source": "<source span id>",
+    "reason": "The reviewer may be a person or a subagent.",
+    "replacement": {
+      "fixed_bindings": [],
+      "inferred_rules": [],
+      "dispositions": [{"source":"<source span id>","kind":"unresolved","reason":"Reviewer identity is unspecified."}]
+    }
+  }]
+}
+```
+
+To correct a binding, copy the source's record from `run.interpretations` into `fixed_bindings` for a parser-fixed modality or `inferred_rules` otherwise. Remove `origin` and, for fixed bindings, `modality`. Edit the term and its supporting evidence. Include one matching disposition. Run `semanticlint replay RUN --overlay correction.json --save-run NEW_RUN` to preserve the correction and replay it later. Source or prompt changes invalidate the old review anchor.
+
+See the [MCP server and CI demonstration](examples/retry-server/README.md) and [implementation and evaluation specification](docs/SPEC.md).

@@ -1,0 +1,28 @@
+name: SemanticLint demo
+on:
+  push:
+    branches: [main, milestone-2]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked --group demo --python 3.13
+      - run: uv run --no-sync python -m unittest discover -s tests -v
+      - name: Compare served skills with the checkout
+        run: uv run --no-sync python examples/retry-server/check.py --publication-only --cache "$RUNNER_TEMP/semanticlint"
+      - name: Check the server's published instructions with OpenAI
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: uv run --no-sync python examples/retry-server/check.py --cache "$RUNNER_TEMP/semanticlint"
+      - name: Exercise the one-word regression and repair
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/milestone-2'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: uv run --no-sync python examples/retry-server/acceptance.py --cache "$RUNNER_TEMP/semanticlint"
