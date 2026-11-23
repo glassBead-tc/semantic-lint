@@ -100,12 +100,25 @@ class Disposition(Classification):
     source: str
 
 
+class ActionBinding(Binding):
+    performer: str | None
+
+
+class WireBindings(Bindings):
+    action: ActionBinding
+    alternatives: list[ActionBinding]
+
+
+class WireInferred(WireBindings):
+    modality: Literal["must", "forbid", "requires"]
+
+
 class FixedUnit(Classification):
-    rules: list[Bindings]
+    rules: list[WireBindings]
 
 
 class InferredUnit(Classification):
-    rules: list[InferredBindings]
+    rules: list[WireInferred]
 
 
 class Extraction(Output):
@@ -161,8 +174,8 @@ in supporting, overrides and evidence (never paths or line numbers).
 For fixed constructions the schema omits modality. The parser supplies it.
 If a fixed construction is misclassified or unsupported, abstain. For other clear duties infer modality.
 Never turn examples, permissions, descriptions, or epistemic text into obligations.
-Use actor first for actions (default actor value is the profile receiver), then typed objects.
-Use $variable for each universally quantified entity, or named domain constants for individuals.
+Put the actor in action.performer. Use null for the receiving agent. action.args and alternative.args contain only objects or other targets of the action; never repeat the performer in args.
+For a rule about every object, use an argument such as {"sort":"document","value":"$doc"} with the same variable for that object in every predicate or action in the rule. For individuals use the exact named domain constants from the profile. Keep all variable and symbol names valid identifiers.
 Use stable snake_case symbols, put a short exact verbatim source substring in wording, and cite span IDs in evidence.
 Only merge terminology when its meaning is supported. Include meaning-bearing definitions,
 heading or list context in supporting. If an identity is uncertain explain it as unresolved.

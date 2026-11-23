@@ -62,7 +62,13 @@ def covered_request(provider, stage, payload, schema):
             bindings = row.pop("rules", [])
             fields["dispositions"].append(dict(source=s["id"], **row))
             group = "fixed_bindings" if s["fixed"] else "inferred_rules"
-            fields[group].extend(dict(source=s["id"], **rule) for rule in bindings)
+            for rule in bindings:
+                for action in [rule["action"], *rule["alternatives"]]:
+                    performer = (
+                        action.pop("performer") or payload["profile"]["receiver"]
+                    )
+                    action["args"].insert(0, dict(sort="actor", value=performer))
+                fields[group].append(dict(source=s["id"], **rule))
     else:
         fields = {
             "suspected": output.pop("suspected"),

@@ -154,6 +154,9 @@ def check(root, cache, offline=False):
         print(
             f"{len(result['findings'])} conflict(s), {len(targets)} operative passages, offline replay matched."
         )
+        fresh = [r for r in result["receipts"] if not r["cached"]]
+        tokens = sum((r.get("usage") or {}).get("total_tokens", 0) for r in fresh)
+        print(f"{len(fresh)} fresh provider calls, {tokens} reported tokens.")
         for f in result["findings"]:
             check_retry_witness(f)
             print(f["context"])

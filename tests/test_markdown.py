@@ -39,6 +39,13 @@ def scripted_response(shape, data):
                     for rule in data["fixed_bindings"] + data["inferred_rules"]
                     if rule["source"] == sid
                 ]
+                values["rules"] = deepcopy(values["rules"])
+                for rule in values["rules"]:
+                    for action in [rule["action"], *rule["alternatives"]]:
+                        actor = action["args"].pop(0)
+                        action["performer"] = (
+                            None if actor["value"] == "agent" else actor["value"]
+                        )
     return shape.model_validate(slots)
 
 
