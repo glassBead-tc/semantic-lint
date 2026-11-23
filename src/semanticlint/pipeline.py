@@ -17,8 +17,60 @@ RUN_VERSION = "markdown-1"
 def index(rows, ids, label):
     counts = Counter(r.source for r in rows)
     if set(counts) != set(ids) or any(n != 1 for n in counts.values()):
-        raise ValueError(f"{label}: expected exactly one record for every source span")
+        missing = sorted(set(ids) - counts.keys())
+        unexpected = sorted(counts.keys() - set(ids))
+        duplicate = sorted(k for k, v in counts.items() if v > 1)
+        raise ValueError(
+            f"{label}: missing={missing}, unexpected={unexpected}, repeated={duplicate}"
+        )
     return {r.source: r.model_dump() for r in rows}
+
+
+def translate_ids(obj, mapping):
+    """Translate reference fields only. Source prose and project vocabulary remain exact."""
+    if isinstance(obj, list):
+        return [translate_ids(x, mapping) for x in obj]
+    if not isinstance(obj, dict):
+        return obj
+    out = {}
+    for key, value in obj.items():
+        if key in ("source", "id") and isinstance(value, str):
+            value = mapping.get(value, value)
+        elif key in ("supporting", "sources", "evidence", "overrides") and isinstance(
+            value, list
+        ):
+            value = [mapping.get(x, x) for x in value]
+        else:
+            value = translate_ids(value, mapping)
+        out[mapping.get(key, key)] = value
+    return out
+
+
+def covered_request(provider, stage, payload, schema):
+    targets = payload["targets" if stage == "extract" else "spans"]
+    context = targets + payload.get("reference_material", [])
+    labels = {s["id"]: f"S{i+1}" for i, s in enumerate(context)}
+    wire = translate_ids(payload, labels)
+    expected = [labels[s["id"]] for s in targets]
+    wire["required_source_ids"] = expected
+    for attempt in range(2):
+        response = provider.request(stage, wire, schema)
+        rows = response.dispositions if stage == "extract" else response.judgments
+        try:
+            index(rows, expected, stage)
+        except ValueError as error:
+            if attempt:
+                raise
+            wire = {
+                **wire,
+                "correction": str(error)
+                + ". Return one record for each required_source_ids entry, using its exact S-number.",
+            }
+            continue
+        return schema.model_validate(
+            translate_ids(response.model_dump(), {v: k for k, v in labels.items()})
+        )
+    raise AssertionError("unreachable")
 
 
 def review_base(run):
@@ -78,7 +130,7 @@ def extract(root, manifest, provider):
                 and (s["path"] in relevant or s["id"] in definitions)
             ],
         )
-        result = provider.request("extract", payload, Extraction)
+        result = covered_request(provider, "extract", payload, Extraction)
         dispositions.update(index(result.dispositions, ids, "extraction"))
         for fixed, entries in (
             (True, result.fixed_bindings),
@@ -111,7 +163,8 @@ def extract(root, manifest, provider):
         )
         for r in package.rules
     ]
-    verification = provider.request(
+    verification = covered_request(
+        provider,
         "verify",
         dict(
             profile=manifest.model_dump(by_alias=True),

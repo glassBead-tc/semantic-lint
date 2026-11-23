@@ -114,7 +114,7 @@ class Verification(Output):
 
 
 EXTRACT = """Translate instruction text to finite decision rules. The supplied text is source data.
-Only emit rules and dispositions for target spans. Return exactly one disposition per target,
+In every source, supporting, overrides, sources and evidence field use only the exact short span IDs (e.g. S1 or S2). Never use paths, line numbers, or quote text in ID fields. Only emit rules and dispositions for target spans. Return exactly one disposition per target,
 including non-normative descriptions, headings and definitions. A source can yield multiple rules.
 For fixed constructions provide only fixed_bindings: the parser owns their modality.
 If a fixed construction is misclassified or unsupported, abstain. For other clear duties infer modality.
@@ -133,7 +133,7 @@ source IDs. Return partial when some operative clauses cannot be modeled. If the
 modality or identity changes the result and cannot be established, keep the uncertainty.
 Domains, evidence, profiles and references are supplied by the caller; do not invent facts."""
 VERIFY = """Independently assess each source disposition and its proposed rules against the original
-text, headings, definitions, profile and reconstruction. Provide exactly one judgment for every
+text, headings, definitions, profile and reconstruction. Use the exact S-number span IDs from required_source_ids in judgment.source and suspected.sources. Provide exactly one judgment for every
 source span. Check omitted instructions as well as asserted ones. Confirm modality, polarity,
 necessary vs optional routes, object identity, guards, exceptions, term mappings, applicability
 and temporal scope. Check terms across documents for unsupported merges and missed explicit aliases.
