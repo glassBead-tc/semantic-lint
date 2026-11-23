@@ -614,3 +614,43 @@ class MarkdownTests(unittest.TestCase):
         self.assertEqual(run["reconciliations"], [])
         self.assertEqual(len(run["rejected_reconciliations"]), 1)
         self.assertEqual(report(run)["coverage"]["unresolved"], 0)
+
+    def test_invalid_mapping_evidence_retains_original_for_independent_check(self):
+        class InvalidMapper:
+            model = "fixture"
+            receipts = []
+
+            def request(self, stage, payload, schema):
+                if stage == "normalize":
+                    sid = payload["rules"][0]["source"]
+                    return schema(
+                        changes=[
+                            dict(
+                                source=sid,
+                                kind="predicates",
+                                original="idempotent",
+                                canonical="failed",
+                                invert=True,
+                                evidence=["untraceable definition"],
+                                reason="guess",
+                            )
+                        ]
+                    )
+                return (
+                    RecordedResponses()
+                    .parse(
+                        input=json.dumps(payload), model=self.model, text_format=schema
+                    )
+                    .output_parsed
+                )
+
+        with TemporaryDirectory() as tmp:
+            skills = copytree(DEMO / "skills", Path(tmp) / "skills")
+            path = skills / "recovery" / "SKILL.md"
+            path.write_bytes(path.read_bytes().replace(b"failed idempotent", b"failed"))
+            run = extract(skills, PROFILE, InvalidMapper())
+            self.assertEqual(run["reconciliations"], [])
+            self.assertEqual(
+                run["rejected_reconciliations"][0]["assessment"]["verdict"], "invalid"
+            )
+            self.assertTrue(report(run)["findings"][0]["actionable"])

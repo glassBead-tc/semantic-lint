@@ -105,6 +105,12 @@ def covered_request(provider, stage, payload, schema):
     )
 
 
+class InvalidMapping(ValueError):
+    def __init__(self, message, changes):
+        super().__init__(message)
+        self.changes = changes
+
+
 def normalize(provider, manifest, spans, rules, registry):
     labels = {sid: f"S{i+1}" for i, sid in enumerate(spans)}
     payload = translate_ids(
@@ -137,7 +143,9 @@ def normalize(provider, manifest, spans, rules, registry):
             or not set(change["evidence"]) <= spans.keys()
             or not change["reason"].strip()
         ):
-            raise ValueError("invalid registry reconciliation: " + str(change))
+            raise InvalidMapping(
+                "invalid signature, action polarity, or evidence ID", changes
+            )
         lookup[key] = change
     applied = set()
     corrected = deepcopy(rules)
@@ -160,7 +168,9 @@ def normalize(provider, manifest, spans, rules, registry):
                 if rewrite(literal["fact"], "predicates"):
                     literal["negated"] = not literal["negated"]
     if applied != set(lookup):
-        raise ValueError("registry reconciliation has no matching source binding")
+        raise InvalidMapping(
+            "registry reconciliation has no matching source binding", changes
+        )
     return corrected, changes
 
 
@@ -248,9 +258,22 @@ def extract(root, manifest, provider):
     package, registry, provenance = compile_rules(source, manifest, rules)
     original_rules = rules
     reconciliations = []
+    rejected = []
     if len({r["source"] for r in rules}) > 1:
-        rules, reconciliations = normalize(provider, manifest, spans, rules, registry)
-        package, registry, provenance = compile_rules(source, manifest, rules)
+        try:
+            rules, reconciliations = normalize(
+                provider, manifest, spans, rules, registry
+            )
+        except InvalidMapping as invalid:
+            rejected = [
+                {
+                    "change": change,
+                    "assessment": {"verdict": "invalid", "reason": str(invalid)},
+                }
+                for change in invalid.changes
+            ]
+        if reconciliations:
+            package, registry, provenance = compile_rules(source, manifest, rules)
 
     def verify(package, registry, provenance, rules, reconciliations):
         reconstructions = [
@@ -284,7 +307,6 @@ def extract(root, manifest, provider):
     verification, judgments = verify(
         package, registry, provenance, rules, reconciliations
     )
-    rejected = []
     if any(judgments[c["source"]]["verdict"] != "agree" for c in reconciliations):
         # Revert the interdependent mapping batch. Only a fresh verification
         # of the original interpretation can establish its source fidelity.
