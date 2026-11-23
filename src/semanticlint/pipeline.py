@@ -135,6 +135,7 @@ def normalize(provider, manifest, spans, rules, registry):
         if (
             src not in spans
             or (kind == "predicates" and old in set(manifest.complements) | set(manifest.complements.values()))
+            or (kind == "actions" and old in set(manifest.action_aliases) | set(manifest.action_aliases.values()))
             or old not in symbols
             or new not in symbols
             or symbols[old] != symbols[new]
@@ -404,6 +405,8 @@ def compile_rules(source, manifest, interpretations):
                 )
             evidence.update(new)
             key = call["symbol"]
+            if kind == "actions":
+                key = manifest.action_aliases.get(key, key)
             sorts = [a["sort"] for a in call["args"]]
             if kind == "actions" and (not sorts or sorts[0] != "actor"):
                 raise ValueError(f"{key}: first action argument must be an actor")
